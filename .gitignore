@@ -49,3 +49,6 @@ nosetests.xml
 
 #Mr Developer
 .mr.developer.cfg
+
+# Specific stuff
+/lib/pypy-*

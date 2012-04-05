@@ -357,6 +357,7 @@ class BotFactory(protocol.ClientFactory):
 
 def main(argv):
     import sys
+    import types
     import argparse
     from straight.plugin import load
 
@@ -367,6 +368,9 @@ def main(argv):
 
     # Start twisted logging
     log.startLogging(sys.stdout)
+    #sys.stdin.isatty = types.MethodType(lambda self: False, sys.stdin)
+    #sys.stdout.isatty = types.MethodType(lambda self: False, sys.stdout)
+    sys.stderr.isatty = types.MethodType(lambda self: False, sys.stderr)
 
     # Find plugins
     plugins = load('csbot.plugins', subclasses=Plugin)
