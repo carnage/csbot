@@ -283,6 +283,12 @@ class BotProtocol(irc.IRCClient):
         # RPL_ENDOFNAMES events
         self.names_accumulator = dict()
 
+        # Accumulated WHO responses since last RPL_ENDOFWHO
+        self.who_accumulator = list()
+        # Queue of callbacks for complete WHO responses, called with a list
+        # of raw params lists from RPL_WHOREPLY or RPL_WHOSPCRPL events
+        self.who_callbacks = collections.deque()
+
     def connectionMade(self):
         irc.IRCClient.connectionMade(self)
         print "[Connected]"
@@ -342,29 +348,47 @@ class BotProtocol(irc.IRCClient):
     def identify(self, user):
         """Find the account *user* is identified to.  The
         :meth:`userIdentified` event is fired when a response is received.
+
+        .. note:: The use of Freenode's extended WHO syntax in this method is
+                  almost certainly not portable to other networks.
         """
-        self.sendLine(self.FORMATTED_WHO.format(
-            query=user, format='na', tag=self.WHO_TAG_ACCOUNT))
+        def cb(data):
+            if len(data) == 0 or data[0][2] == '0':
+                self.userIdentified(user, None)
+            else:
+                self.userIdentified(user, data[0][2])
+        self.sendLine('WHO {} %na'.format(user))
+        self.who_callbacks.append(cb)
 
     def irc_354(self, prefix, params):
-        """Handles Freenode's "formatted WHO" responses which arrive with
-        numeric 354.
-
-        All uses of formatted WHO requests should use the :attr:`FORMATTED_WHO`
-        template and a consistent numeric tag for the request type to help
-        with routing the replies.
+        """Accumulate non-RFC "extended WHO" replies.
         """
-        print '354', prefix, params
-        tag = params[1]
+        self.who_accumulator.append(params)
 
-        if tag == self.WHO_TAG_ACCOUNT:
-            user, account = params[2:4]
-            if account == '0':
-                account = None
-            self.userIdentified(user, account)
+    def irc_RPL_WHOREPLY(self, prefix, params):
+        """Accumulate WHO replies.
+        """
+        self.who_accumulator.append(params)
 
     def irc_RPL_ENDOFWHO(self, prefix, params):
-        print 'RPL_ENDOFWHO', prefix, params
+        """Fire the next callback in the queue with the accumulated WHO
+        replies and reset the accumulator.
+
+        It is assumed that WHO requests are responded to strictly in the order
+        they were requested.  By sending a WHO request and then adding a
+        callback to :attr:`who_callbacks`, the whole response can be handled
+        when it has been completely received.  This assumption is possibly the
+        only reasonable way of pairing responses to requests.
+        """
+        data = self.who_accumulator
+        self.who_accumulator = list()
+        try:
+            f = self.who_callbacks.popleft()
+        except IndexError:
+            self.bot.log_err('End of WHO reply but no callbacks in queue')
+        else:
+            if f is not None:
+                f(data)
 
     def irc_RPL_NAMREPLY(self, prefix, params):
         channel = params[2]
