@@ -265,6 +265,11 @@ class PluginError(Exception):
 
 
 class BotProtocol(irc.IRCClient):
+    #: Template for "formatted WHO" requests on Freenode
+    FORMATTED_WHO = 'WHO {query} %t{format},{tag}'
+    #: Number to tag replies to account info requests with
+    WHO_TAG_ACCOUNT = '1'
+
     def __init__(self, bot):
         self.bot = bot
         # Get IRCClient configuration from the Bot
@@ -327,6 +332,39 @@ class BotProtocol(irc.IRCClient):
         """Called when the NAMES list for a channel has been received.
         """
         pass
+
+    @events.proxy
+    def userIdentified(self, user, account):
+        """Called when an :meth:`identify` request is responded to.
+        """
+        pass
+
+    def identify(self, user):
+        """Find the account *user* is identified to.  The
+        :meth:`userIdentified` event is fired when a response is received.
+        """
+        self.sendLine(self.FORMATTED_WHO.format(
+            query=user, format='na', tag=self.WHO_TAG_ACCOUNT))
+
+    def irc_354(self, prefix, params):
+        """Handles Freenode's "formatted WHO" responses which arrive with
+        numeric 354.
+
+        All uses of formatted WHO requests should use the :attr:`FORMATTED_WHO`
+        template and a consistent numeric tag for the request type to help
+        with routing the replies.
+        """
+        print '354', prefix, params
+        tag = params[1]
+
+        if tag == self.WHO_TAG_ACCOUNT:
+            user, account = params[2:4]
+            if account == '0':
+                account = None
+            self.userIdentified(user, account)
+
+    def irc_RPL_ENDOFWHO(self, prefix, params):
+        print 'RPL_ENDOFWHO', prefix, params
 
     def irc_RPL_NAMREPLY(self, prefix, params):
         channel = params[2]
