@@ -150,6 +150,30 @@ class Event(object):
         self.event_type = event_type
 
 
+class MessageEvent(Event):
+    #: User the message came from
+    user = None
+    #: Channel the message was sent to; will be the bot's nick if
+    #: the message was private
+    channel = None
+    #: The raw message contents
+    raw_data = None
+    #: The context-sensitive message contents, e.g. just the value sent with
+    #: a CTCP message.
+    message = None
+    #: Was the message sent privately?
+    private = False
+    #: Was the message sent directly, i.e. either privately or by addressing
+    #: the bot by name in a public channel?
+    direct = False
+
+    def reply(self, msg, is_verbose=False):
+        pass
+
+    def error(self, msg):
+        pass
+
+
 class CommandEvent(Event):
     #: The command invoked (minus any trigger characters).
     command = None
